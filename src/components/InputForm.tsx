@@ -22,14 +22,18 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit }) => {
   const [link, setLink] = useState('');
   const [videoType, setVideoType] = useState('auto');
   const [isFetching, setIsFetching] = useState(false);
+  const [productPrice, setProductPrice] = useState('');
+  const [productCategory, setProductCategory] = useState('');
 
   const handleFetch = async () => {
     setIsFetching(true);
     try {
       const response = await axios.post('http://localhost:8000/api/scrape', { url: link });
-      const { title, image, description } = response.data;
+      const { title, image, description, price, category } = response.data;
       setImage(image);
-      setText(`${title}\n\n${description}`);
+      setText(`${title}\n\nPrice: ${price}\nCategory: ${category}\n\n${description}`);
+      setProductPrice(price);
+      setProductCategory(category);
     } catch (error) {
       console.error('Failed to fetch product data', error);
       // Optionally, show an error message to the user
@@ -97,6 +101,29 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit }) => {
             value={image}
             onChange={(e) => setImage(e.target.value)}
             helperText="This will be populated by the fetch, or you can enter a URL manually."
+          />
+        </Box>
+
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <TextField
+            fullWidth
+            label="Product Price"
+            variant="outlined"
+            value={productPrice}
+            InputProps={{
+              readOnly: true,
+            }}
+            helperText="Fetched product price."
+          />
+          <TextField
+            fullWidth
+            label="Product Category"
+            variant="outlined"
+            value={productCategory}
+            InputProps={{
+              readOnly: true,
+            }}
+            helperText="Fetched product category."
           />
         </Box>
 

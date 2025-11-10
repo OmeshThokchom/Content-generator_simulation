@@ -6,9 +6,11 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Grid,
   Box,
+  CircularProgress,
+  Stack,
 } from '@mui/material';
+import axios from 'axios';
 
 interface InputFormProps {
   onSubmit: (data: { image: string; text: string; link: string; videoType: string }) => void;
@@ -19,6 +21,21 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit }) => {
   const [text, setText] = useState('');
   const [link, setLink] = useState('');
   const [videoType, setVideoType] = useState('auto');
+  const [isFetching, setIsFetching] = useState(false);
+
+  const handleFetch = async () => {
+    setIsFetching(true);
+    try {
+      const response = await axios.post('http://localhost:8000/api/scrape', { url: link });
+      const { title, image, description } = response.data;
+      setImage(image);
+      setText(`${title}\n\n${description}`);
+    } catch (error) {
+      console.error('Failed to fetch product data', error);
+      // Optionally, show an error message to the user
+    }
+    setIsFetching(false);
+  };
 
   const handleSubmit = () => {
     onSubmit({ image, text, link, videoType });
@@ -37,18 +54,53 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit }) => {
       noValidate
       autoComplete="off"
     >
-      <Grid container spacing={3}>
-        <Grid item xs={12}>
+      <Stack spacing={3}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+            <TextField
+              fullWidth
+              label="Product Page Link"
+              variant="outlined"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              helperText="Enter a link to a product page to scrape metadata."
+            />
+            <Button
+              variant="contained"
+              onClick={handleFetch}
+              disabled={isFetching || !link}
+              sx={{ height: '56px' }}
+            >
+              {isFetching ? <CircularProgress size={24} /> : 'Fetch'}
+            </Button>
+          </Box>
+
+        {image && (
+          <Box
+            component="img"
+            sx={{
+              height: 200,
+              width: 'auto',
+              maxHeight: { xs: 233, md: 167 },
+              maxWidth: { xs: 350, md: 250 },
+              borderRadius: 1,
+            }}
+            alt="Fetched product"
+            src={image}
+          />
+        )}
+
+        <Box>
           <TextField
             fullWidth
             label="Image URL"
             variant="outlined"
             value={image}
             onChange={(e) => setImage(e.target.value)}
-            helperText="Enter a URL to an image for the video."
+            helperText="This will be populated by the fetch, or you can enter a URL manually."
           />
-        </Grid>
-        <Grid item xs={12}>
+        </Box>
+
+        <Box>
           <TextField
             fullWidth
             label="Product/Video Text"
@@ -57,20 +109,11 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit }) => {
             rows={4}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            helperText="Describe the product or provide text for the video."
+            helperText="This will be populated by the fetch, or you can enter text manually."
           />
-        </Grid>
-        <Grid item xs={12}>
-          <TextField
-            fullWidth
-            label="Product Page Link"
-            variant="outlined"
-            value={link}
-            onChange={(e) => setLink(e.target.value)}
-            helperText="Enter a link to a product page to scrape metadata."
-          />
-        </Grid>
-        <Grid item xs={12} sm={6}>
+        </Box>
+
+        <Box sx={{ width: { xs: '100%', sm: '50%' } }}>
           <FormControl fullWidth variant="outlined">
             <InputLabel>Video Type</InputLabel>
             <Select
@@ -83,12 +126,9 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit }) => {
               <MenuItem value="reel">Social Media Reel</MenuItem>
             </Select>
           </FormControl>
-        </Grid>
-        <Grid
-          item
-          xs={12}
-          sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}
-        >
+        </Box>
+
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
           <Button
             variant="contained"
             color="primary"
@@ -97,8 +137,8 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit }) => {
           >
             Generate Video
           </Button>
-        </Grid>
-      </Grid>
+        </Box>
+      </Stack>
     </Box>
   );
 };

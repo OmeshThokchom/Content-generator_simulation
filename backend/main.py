@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import requests
 from bs4 import BeautifulSoup
+import re
+import locale
 
 app = FastAPI()
 
@@ -71,25 +73,57 @@ async def scrape_product(request: ScrapeRequest):
 
         # --- Extract Price ---
         price = "Price not found"
-        # Common price elements
-        price_elements = [
-            soup.find('span', class_='a-price-whole'), # Main price whole number
-            soup.find('span', class_='a-offscreen'), # Hidden price for screen readers
-            soup.find(id='priceblock_ourprice'),
-            soup.find(id='priceblock_saleprice'),
-            soup.find(class_='priceToPay') # New common class for price
-        ]
+        raw_price_text = ""
+
+        # Try to find the main price display (e.g., $123.45)
+        price_whole = soup.find('span', class_='a-price-whole')
+        price_fraction = soup.find('span', class_='a-price-fraction')
+        price_symbol = soup.find('span', class_='a-price-symbol')
+
+        if price_whole and price_fraction:
+            raw_price_text = price_whole.get_text(strip=True) + price_fraction.get_text(strip=True)
+        else:
+            # Fallback to a-offscreen which often contains the full price string
+            offscreen_price = soup.find('span', class_='a-offscreen')
+            if offscreen_price:
+                # Use regex to find a price pattern within the offscreen text
+                price_match = re.search(r'(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)', offscreen_price.get_text(strip=True))
+                if price_match:
+                    raw_price_text = price_match.group(1)
+            else:
+                # Further fallbacks for other price elements
+                our_price = soup.find(id='priceblock_ourprice')
+                if our_price:
+                    raw_price_text = our_price.get_text(strip=True)
+                else:
+                    sale_price = soup.find(id='priceblock_saleprice')
+                    if sale_price:
+                        raw_price_text = sale_price.get_text(strip=True)
         
-        for p_el in price_elements:
-            if p_el:
-                found_price_text = p_el.get_text(strip=True)
-                if found_price_text and any(char.isdigit() for char in found_price_text): # Ensure it contains numbers
-                    price = found_price_text
-                    # Try to combine with fraction if available
-                    price_fraction = soup.find('span', class_='a-price-fraction')
-                    if price_fraction and 'a-price-whole' in p_el.get('class', []): # Only if it's the whole part
-                        price += price_fraction.get_text(strip=True)
-                    break
+        # Clean and format the price string
+        if raw_price_text:
+            # Remove currency symbols and any non-numeric characters except for digits and a single decimal point
+            # This regex removes anything that's not a digit or a dot, but only keeps the first dot
+            cleaned_price = re.sub(r'[^\d.]', '', raw_price_text)
+            
+            # Handle multiple decimal points if they somehow slipped through (e.g., "1.23.45")
+            parts = cleaned_price.split('.')
+            if len(parts) > 2:
+                cleaned_price = parts[0] + '.' + ''.join(parts[1:])
+            
+            try:
+                # Convert to float
+                numeric_price = float(cleaned_price)
+                
+                # Manual formatting for INR 1,310 (no decimal if .00)
+                if numeric_price == int(numeric_price):
+                    price = f"INR {int(numeric_price):,}"
+                else:
+                    price = f"INR {numeric_price:,.2f}"
+
+            except ValueError:
+                # If conversion fails, keep the original raw string
+                price = raw_price_text # Fallback to raw if cleaning failed
         
         # --- Extract Category from breadcrumbs ---
         category = "Category not found"
